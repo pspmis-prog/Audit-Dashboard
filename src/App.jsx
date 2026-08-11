@@ -1418,6 +1418,7 @@ function App() {
                                 <option value="HDD">HDD</option>
                                 <option value="PSW">PSW</option>
                                 <option value="AW">AW</option>
+                                <option value="Other">Other</option>
                               </select>
                             </td>
                             <td style={{ ...tableCellStyle, overflow: "visible" }}>
