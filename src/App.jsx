@@ -224,11 +224,13 @@ function App() {
   // Status shown in the Followup tab list.
   const getFollowUpState = (finding) => (hasFollowUp(finding) ? "Submitted" : "Pending");
 
-  // Schedule status for a finding, once the follow-up has been saved:
+  // Schedule status for a finding. The follow-up due date is set the moment
+  // the finding itself is raised (15 days out), so this now applies even
+  // before the follow-up evidence is submitted:
   // - "Closed": finding is fully closed out (finding + follow-up photos both present)
-  // - "Open": follow-up hasn't been submitted yet, so no followUpDate exists
-  // - "Upcoming": follow-up date hasn't arrived yet
-  // - "Overdue": follow-up date has passed and it's still not closed
+  // - "Open": no due date on record for some reason (shouldn't normally happen)
+  // - "Upcoming": due date hasn't arrived yet
+  // - "Overdue": due date has passed and it's still not closed
   const getFindingScheduleStatus = (finding) => {
     if (getFindingClosureStatus(finding) === "Closed") return "Closed";
 
@@ -798,13 +800,16 @@ function App() {
 
     try {
       const uploadedPhotoUrls = await uploadMultipleFiles(quickFindingPhotoFiles, "Audit_Photos");
+      // Follow-up due date = 15 days from the moment the finding itself is
+      // raised, so it's visible right away — not just once the follow-up
+      // evidence is eventually submitted.
       const res = await apiSaveFinding({
         auditId: quickActionAuditId,
         auditDate: formatDateOnly(audit.auditDateTime),
         finding: quickFindingText,
         photoUrls: uploadedPhotoUrls,
         followUpPhotoUrls: [],
-        followUpDate: ""
+        followUpDate: calculateFollowUpDate(new Date())
       });
 
       if (!res || res.success !== true) {
@@ -844,8 +849,9 @@ function App() {
     try {
       const existingPhotoUrls = getFindingPhotoUrls(finding);
       const uploadedFollowUpPhotoUrls = await uploadMultipleFiles(quickFollowUpPhotoFiles, "Audit_Photos");
+      // The due date was already set when the finding was first raised —
+      // just record when the follow-up itself was actually submitted.
       const followUpSubmittedAt = new Date();
-      const followUpDate = calculateFollowUpDate(followUpSubmittedAt);
 
       const res = await apiSaveFinding({
         findingId: quickFollowUpFindingId,
@@ -855,7 +861,7 @@ function App() {
         photoUrls: existingPhotoUrls,
         followUpPhotoUrls: uploadedFollowUpPhotoUrls,
         followUpSubmittedDate: followUpSubmittedAt.toISOString(),
-        followUpDate,
+        followUpDate: finding.followUpDate || "",
         mode: "followup"
       });
 
@@ -927,16 +933,16 @@ function App() {
           "Audit_Photos"
         );
 
-        // No follow-up has happened yet on a brand-new finding, so the
-        // follow-up due date isn't known until the doer actually submits
-        // the follow-up evidence (see the "followup" branch below).
+        // Follow-up due date = 15 days from when the finding itself is
+        // raised, so it's visible right away in the list — not just once
+        // the follow-up evidence is eventually submitted.
         const res = await apiSaveFinding({
           auditId: findingForm.auditId,
           auditDate: formatDateOnly(audit.auditDateTime),
           finding: findingForm.finding,
           photoUrls: uploadedPhotoUrls,
           followUpPhotoUrls: [],
-          followUpDate: ""
+          followUpDate: calculateFollowUpDate(new Date())
         });
 
         if (!res || res.success !== true) {
@@ -968,12 +974,9 @@ function App() {
           "Audit_Photos"
         );
 
-        // The moment the doer actually submits the follow-up — kept as its
-        // own field so the list can show exactly when this step happened.
+        // The due date was already set when the finding was first raised —
+        // just record when the follow-up itself was actually submitted.
         const followUpSubmittedAt = new Date();
-
-        // Follow-up due date = 15 days from that same submission.
-        const followUpDate = calculateFollowUpDate(followUpSubmittedAt);
 
         const res = await apiSaveFinding({
           findingId: findingForm.findingId,
@@ -983,7 +986,7 @@ function App() {
           photoUrls: existingPhotoUrls,
           followUpPhotoUrls: uploadedFollowUpPhotoUrls,
           followUpSubmittedDate: followUpSubmittedAt.toISOString(),
-          followUpDate,
+          followUpDate: selectedFindingInFindingTab.followUpDate || "",
           mode: "followup"
         });
 
@@ -2206,16 +2209,17 @@ function App() {
                 )}
               </div>
               <div style={{ overflowX: "auto", maxWidth: "100%" }}>
-                <table style={{ width: "100%", minWidth: "1000px", tableLayout: "auto", borderCollapse: "collapse" }}>
+                <table style={{ width: "100%", minWidth: "1150px", tableLayout: "auto", borderCollapse: "collapse" }}>
                   <colgroup>
+                    <col style={{ width: "7%" }} />
+                    <col style={{ width: "7%" }} />
                     <col style={{ width: "8%" }} />
-                    <col style={{ width: "8%" }} />
-                    <col style={{ width: "9%" }} />
-                    <col style={{ width: "24%" }} />
-                    <col style={{ width: "14%" }} />
-                    <col style={{ width: "14%" }} />
-                    <col style={{ width: "11%" }} />
+                    <col style={{ width: "21%" }} />
                     <col style={{ width: "12%" }} />
+                    <col style={{ width: "12%" }} />
+                    <col style={{ width: "10%" }} />
+                    <col style={{ width: "10%" }} />
+                    <col style={{ width: "11%" }} />
                   </colgroup>
                   <thead>
                     <tr style={{ background: "#212529" }}>
@@ -2225,14 +2229,15 @@ function App() {
                       <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Finding</th>
                       <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Finding Photos</th>
                       <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Follow-up Photos</th>
-                      <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Follow-up Date</th>
+                      <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Follow-up Due</th>
+                      <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Follow-up Submitted</th>
                       <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {followUpListFindings.length === 0 ? (
                       <tr>
-                        <td colSpan="8" style={{ ...tableCellStyle, textAlign: "center", color: "#6c757d" }}>
+                        <td colSpan="9" style={{ ...tableCellStyle, textAlign: "center", color: "#6c757d" }}>
                           No findings match this filter
                         </td>
                       </tr>
@@ -2250,6 +2255,9 @@ function App() {
                             </td>
                             <td style={tableCellWrapStyle}>
                               {renderPhotoLinks(getFollowUpPhotoUrls(f), "View Follow-up Photo")}
+                            </td>
+                            <td style={tableCellStyle}>
+                              {formatDateOnly(f.followUpDate) || <span style={{ color: "#6c757d" }}>—</span>}
                             </td>
                             <td style={tableCellStyle}>
                               {formatDateOnly(f.followUpSubmittedDate) || <span style={{ color: "#6c757d" }}>—</span>}
