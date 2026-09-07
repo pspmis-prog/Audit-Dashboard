@@ -35,8 +35,7 @@ function App() {
   const [audits, setAudits] = useState([]);
   const [remarkDrafts, setRemarkDrafts] = useState({});
 
-  // ---- reschedule state ----
-  const [rescheduleAuditId, setRescheduleAuditId] = useState(null);
+  // ---- reschedule state (rendered inside the quick action panel) ----
   const [rescheduleForm, setRescheduleForm] = useState({ newDateTime: "", reason: "" });
 
   // ---- quick action (save finding / follow-up directly from All Schedule) ----
@@ -692,17 +691,8 @@ function App() {
     }
   };
 
-  // ---- Reschedule flow ----
-  const openRescheduleForm = (auditId) => {
-    setRescheduleAuditId(auditId);
-    setRescheduleForm({ newDateTime: "", reason: "" });
-  };
-
-  const closeRescheduleForm = () => {
-    setRescheduleAuditId(null);
-    setRescheduleForm({ newDateTime: "", reason: "" });
-  };
-
+  // ---- Reschedule flow (lives inside the quick action panel now, keyed
+  // off quickActionAuditId — no separate reschedule-only trigger) ----
   const handleRescheduleFormChange = (e) => {
     const { name, value } = e.target;
     setRescheduleForm((prev) => ({ ...prev, [name]: value }));
@@ -722,7 +712,7 @@ function App() {
       return;
     }
 
-    const audit = audits.find((a) => a.auditId === rescheduleAuditId);
+    const audit = audits.find((a) => a.auditId === quickActionAuditId);
     if (!audit) {
       alert("Audit not found");
       return;
@@ -750,7 +740,7 @@ function App() {
       }
 
       alert("Audit rescheduled to " + formatDateOnly(rescheduleForm.newDateTime));
-      closeRescheduleForm();
+      closeQuickAction();
       await loadAuditsFromSheet();
     } catch (err) {
       console.error(err);
@@ -758,16 +748,19 @@ function App() {
     }
   };
 
-  // ---- Quick action: save finding / follow-up directly from a row in the
-  // Audit List, so the doer never has to leave "All Schedule" to log
-  // progress. Anything saved here shows up in the Followup tab too, since
-  // it's writing to the same findings data. ----
+  // ---- Quick action: everything the doer needs for one audit — follow-up
+  // due date, saving a finding / follow-up, and rescheduling if missed —
+  // all live under the single clickable "Action Needed" link, so the doer
+  // never has to leave "All Schedule" to log progress. Anything saved here
+  // shows up in the Followup tab too, since it's writing to the same
+  // findings data. ----
   const openQuickAction = (auditId) => {
     setQuickActionAuditId(auditId);
     setQuickFindingText("");
     setQuickFindingPhotoFiles([]);
     setQuickFollowUpFindingId("");
     setQuickFollowUpPhotoFiles([]);
+    setRescheduleForm({ newDateTime: "", reason: "" });
   };
 
   const closeQuickAction = () => {
@@ -776,6 +769,7 @@ function App() {
     setQuickFindingPhotoFiles([]);
     setQuickFollowUpFindingId("");
     setQuickFollowUpPhotoFiles([]);
+    setRescheduleForm({ newDateTime: "", reason: "" });
   };
 
   const handleQuickFindingPhotoChange = (e) => {
@@ -1596,81 +1590,15 @@ function App() {
                 )}
               </div>
 
-              {/* Inline reschedule panel */}
-              {rescheduleAuditId && (
-                <div
-                  style={{
-                    background: "#fff8e1",
-                    border: "1px solid #ffe08a",
-                    borderRadius: "10px",
-                    padding: "16px",
-                    marginBottom: "15px",
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))",
-                    gap: "14px",
-                    alignItems: "end"
-                  }}
-                >
-                  <div style={{ gridColumn: "1 / -1", fontWeight: "700", color: "#664d03" }}>
-                    Reschedule {rescheduleAuditId}
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                    <label style={{ fontSize: "15px", color: "#000" }}>New Audit Date Time</label>
-                    <input
-                      type="datetime-local"
-                      name="newDateTime"
-                      value={rescheduleForm.newDateTime}
-                      onChange={handleRescheduleFormChange}
-                      style={inputStyle}
-                    />
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", gridColumn: "span 2" }}>
-                    <label style={{ fontSize: "15px", color: "#000" }}>Reason for Reschedule</label>
-                    <input
-                      type="text"
-                      name="reason"
-                      placeholder="e.g. Auditee on leave"
-                      value={rescheduleForm.reason}
-                      onChange={handleRescheduleFormChange}
-                      style={inputStyle}
-                    />
-                  </div>
-                  <div style={{ display: "flex", gap: "10px" }}>
-                    <button
-                      onClick={handleSaveReschedule}
-                      style={{
-                        backgroundColor: "#0d6efd",
-                        color: "#fff",
-                        border: "none",
-                        padding: "12px 18px",
-                        borderRadius: "8px",
-                        cursor: "pointer",
-                        fontSize: "15px"
-                      }}
-                    >
-                      Confirm Reschedule
-                    </button>
-                    <button
-                      onClick={closeRescheduleForm}
-                      style={{
-                        backgroundColor: "#fff",
-                        color: "#495057",
-                        border: "1px solid #ced4da",
-                        padding: "12px 18px",
-                        borderRadius: "8px",
-                        cursor: "pointer",
-                        fontSize: "15px"
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Inline quick action panel — save finding / follow-up right from this list */}
+              {/* Inline quick action panel — due date, save finding/follow-up,
+                  and reschedule (if missed) all live under the one clickable
+                  "Action Needed" link */}
               {quickActionAuditId && (() => {
+                const qaAudit = audits.find((a) => a.auditId === quickActionAuditId);
                 const qaInfo = getAuditActionInfo(quickActionAuditId);
+                const qaScheduleLabel = qaAudit ? getAuditScheduleStatus(qaAudit) : "";
+                const qaMissed = qaScheduleLabel === "Missed";
+                const qaDueDate = getAuditFollowUpDueDate(quickActionAuditId);
                 const qaOpenFindings = getFindingsForAudit(quickActionAuditId).filter(
                   (f) => getFindingClosureStatus(f) !== "Closed"
                 );
@@ -1689,13 +1617,16 @@ function App() {
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        marginBottom: "12px"
+                        marginBottom: "12px",
+                        flexWrap: "wrap",
+                        gap: "8px"
                       }}
                     >
                       <div style={{ fontWeight: "700", color: "#0f5132" }}>
-                        {qaInfo.status === "Pending"
-                          ? `Add Finding — ${quickActionAuditId}`
-                          : `Save Follow-up — ${quickActionAuditId}`}
+                        {quickActionAuditId}
+                        <span style={{ fontWeight: "400", color: "#495057", marginLeft: "10px" }}>
+                          Follow-up Due: {formatDateOnly(qaDueDate) || "—"}
+                        </span>
                       </div>
                       <button
                         onClick={closeQuickAction}
@@ -1711,135 +1642,190 @@ function App() {
                       </button>
                     </div>
 
-                    {qaInfo.status === "Pending" ? (
+                    {qaMissed && (
                       <div
                         style={{
                           display: "grid",
                           gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))",
                           gap: "14px",
-                          alignItems: "end"
+                          alignItems: "end",
+                          background: "#fff8e1",
+                          border: "1px solid #ffe08a",
+                          borderRadius: "8px",
+                          padding: "14px",
+                          marginBottom: "16px"
                         }}
                       >
+                        <div style={{ gridColumn: "1 / -1", fontWeight: "700", color: "#664d03" }}>
+                          Reschedule this audit
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <label style={{ fontSize: "15px", color: "#000" }}>New Audit Date Time</label>
+                          <input
+                            type="datetime-local"
+                            name="newDateTime"
+                            value={rescheduleForm.newDateTime}
+                            onChange={handleRescheduleFormChange}
+                            style={inputStyle}
+                          />
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", gridColumn: "span 2" }}>
+                          <label style={{ fontSize: "15px", color: "#000" }}>Reason for Reschedule</label>
+                          <input
+                            type="text"
+                            name="reason"
+                            placeholder="e.g. Auditee on leave"
+                            value={rescheduleForm.reason}
+                            onChange={handleRescheduleFormChange}
+                            style={inputStyle}
+                          />
+                        </div>
+                        <button
+                          onClick={handleSaveReschedule}
+                          style={{
+                            backgroundColor: "#0d6efd",
+                            color: "#fff",
+                            border: "none",
+                            padding: "12px 18px",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            fontSize: "15px"
+                          }}
+                        >
+                          Confirm Reschedule
+                        </button>
+                      </div>
+                    )}
+
+                    {qaInfo.status !== "Closed" && (
+                      qaInfo.status === "Pending" ? (
                         <div
                           style={{
-                            gridColumn: "1 / -1",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "6px"
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))",
+                            gap: "14px",
+                            alignItems: "end"
                           }}
                         >
-                          <label style={{ fontSize: "15px", color: "#000" }}>Finding</label>
-                          <textarea
-                            rows={2}
-                            value={quickFindingText}
-                            onChange={(e) => setQuickFindingText(e.target.value)}
-                            style={textareaStyle}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: "15px", color: "#000" }}>Evidence Photos</label>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            onChange={handleQuickFindingPhotoChange}
-                            style={{ ...inputStyle, marginTop: "5px" }}
-                          />
-                          {!!quickFindingPhotoFiles.length && (
-                            <div style={{ marginTop: "6px", color: "#6c757d", fontSize: "13px" }}>
-                              {quickFindingPhotoFiles.length} file(s) selected
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={handleQuickSaveNewFinding}
-                          style={{
-                            backgroundColor: "#198754",
-                            color: "#fff",
-                            border: "none",
-                            padding: "12px 18px",
-                            borderRadius: "8px",
-                            cursor: "pointer",
-                            fontSize: "15px"
-                          }}
-                        >
-                          Save Finding
-                        </button>
-                      </div>
-                    ) : (
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))",
-                          gap: "14px",
-                          alignItems: "end"
-                        }}
-                      >
-                        <div>
-                          <label style={{ fontSize: "15px", color: "#000" }}>Finding</label>
-                          <select
-                            value={quickFollowUpFindingId}
-                            onChange={(e) => setQuickFollowUpFindingId(e.target.value)}
-                            style={inputStyle}
+                          <div
+                            style={{
+                              gridColumn: "1 / -1",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "6px"
+                            }}
                           >
-                            <option value="">Select Finding ID</option>
-                            {qaOpenFindings.map((f) => (
-                              <option key={f.findingId} value={f.findingId}>
-                                {f.findingId} — {(f.finding || "").slice(0, 40)}
-                              </option>
-                            ))}
-                          </select>
+                            <label style={{ fontSize: "15px", color: "#000" }}>Finding</label>
+                            <textarea
+                              rows={2}
+                              value={quickFindingText}
+                              onChange={(e) => setQuickFindingText(e.target.value)}
+                              style={textareaStyle}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: "15px", color: "#000" }}>Evidence Photos</label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={handleQuickFindingPhotoChange}
+                              style={{ ...inputStyle, marginTop: "5px" }}
+                            />
+                            {!!quickFindingPhotoFiles.length && (
+                              <div style={{ marginTop: "6px", color: "#6c757d", fontSize: "13px" }}>
+                                {quickFindingPhotoFiles.length} file(s) selected
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={handleQuickSaveNewFinding}
+                            style={{
+                              backgroundColor: "#198754",
+                              color: "#fff",
+                              border: "none",
+                              padding: "12px 18px",
+                              borderRadius: "8px",
+                              cursor: "pointer",
+                              fontSize: "15px"
+                            }}
+                          >
+                            Save Finding
+                          </button>
                         </div>
-                        <div>
-                          <label style={{ fontSize: "15px", color: "#000" }}>Follow-up Evidence Photos</label>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            onChange={handleQuickFollowUpPhotoChange}
-                            style={{ ...inputStyle, marginTop: "5px" }}
-                          />
-                          {!!quickFollowUpPhotoFiles.length && (
-                            <div style={{ marginTop: "6px", color: "#6c757d", fontSize: "13px" }}>
-                              {quickFollowUpPhotoFiles.length} file(s) selected
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={handleQuickSaveFollowUp}
+                      ) : (
+                        <div
                           style={{
-                            backgroundColor: "#198754",
-                            color: "#fff",
-                            border: "none",
-                            padding: "12px 18px",
-                            borderRadius: "8px",
-                            cursor: "pointer",
-                            fontSize: "15px"
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))",
+                            gap: "14px",
+                            alignItems: "end"
                           }}
                         >
-                          Save Follow-up
-                        </button>
-                      </div>
+                          <div>
+                            <label style={{ fontSize: "15px", color: "#000" }}>Finding</label>
+                            <select
+                              value={quickFollowUpFindingId}
+                              onChange={(e) => setQuickFollowUpFindingId(e.target.value)}
+                              style={inputStyle}
+                            >
+                              <option value="">Select Finding ID</option>
+                              {qaOpenFindings.map((f) => (
+                                <option key={f.findingId} value={f.findingId}>
+                                  {f.findingId} — {(f.finding || "").slice(0, 40)}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: "15px", color: "#000" }}>Follow-up Evidence Photos</label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={handleQuickFollowUpPhotoChange}
+                              style={{ ...inputStyle, marginTop: "5px" }}
+                            />
+                            {!!quickFollowUpPhotoFiles.length && (
+                              <div style={{ marginTop: "6px", color: "#6c757d", fontSize: "13px" }}>
+                                {quickFollowUpPhotoFiles.length} file(s) selected
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={handleQuickSaveFollowUp}
+                            style={{
+                              backgroundColor: "#198754",
+                              color: "#fff",
+                              border: "none",
+                              padding: "12px 18px",
+                              borderRadius: "8px",
+                              cursor: "pointer",
+                              fontSize: "15px"
+                            }}
+                          >
+                            Save Follow-up
+                          </button>
+                        </div>
+                      )
                     )}
                   </div>
                 );
               })()}
 
               <div style={{ overflowX: "auto", maxWidth: "100%" }}>
-                <table style={{ width: "100%", minWidth: "1000px", tableLayout: "auto", borderCollapse: "collapse" }}>
+                <table style={{ width: "100%", minWidth: "900px", tableLayout: "auto", borderCollapse: "collapse" }}>
                   <colgroup>
-                    <col style={{ width: "8%" }} />
-                    <col style={{ width: "8%" }} />
-                    <col style={{ width: "7%" }} />
+                    <col style={{ width: "9%" }} />
+                    <col style={{ width: "9%" }} />
                     <col style={{ width: "8%" }} />
                     <col style={{ width: "9%" }} />
-                    <col style={{ width: "7%" }} />
+                    <col style={{ width: "10%" }} />
                     <col style={{ width: "8%" }} />
-                    <col style={{ width: "11%" }} />
-                    <col style={{ width: "7%" }} />
-                    <col style={{ width: "12%" }} />
+                    <col style={{ width: "9%" }} />
+                    <col style={{ width: "13%" }} />
                     <col style={{ width: "8%" }} />
-                    <col style={{ width: "8%" }} />
+                    <col style={{ width: "17%" }} />
                   </colgroup>
                   <thead>
                     <tr style={{ background: "#212529", color: "#fff" }}>
@@ -1853,8 +1839,6 @@ function App() {
                       <th style={tableCellEllipsisStyle}>Remark</th>
                       <th style={tableCellEllipsisStyle}>Schedule</th>
                       <th style={tableCellEllipsisStyle}>Action Needed</th>
-                      <th style={tableCellEllipsisStyle}>Follow-up Due</th>
-                      <th style={tableCellEllipsisStyle}>Reschedule</th>
                     </tr>
                     
                   </thead>
@@ -1862,7 +1846,7 @@ function App() {
                     {filteredAudits.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="12"
+                          colSpan="10"
                           style={{
                             ...tableCellStyle,
                             textAlign: "center",
@@ -1984,47 +1968,26 @@ function App() {
                             </td>
                             <td style={tableCellStyle}>
                               {actionInfo.status === "Closed" ? (
-                                <span style={statusBadgeStyle(actionInfo.status)}>
+                                <span style={{ color: statusBadgeStyle("Closed").color, fontWeight: "600" }}>
                                   {actionInfo.label}
                                 </span>
                               ) : (
                                 <button
                                   onClick={() => openQuickAction(audit.auditId)}
                                   style={{
-                                    ...statusBadgeStyle(actionInfo.status),
+                                    background: "none",
                                     border: "none",
-                                    cursor: "pointer"
+                                    padding: 0,
+                                    cursor: "pointer",
+                                    color: statusBadgeStyle(actionInfo.status).color,
+                                    textDecoration: "underline",
+                                    fontWeight: "600",
+                                    fontSize: "14px"
                                   }}
-                                  title="Click to save finding / follow-up for this audit"
+                                  title="Click for follow-up due date, save finding/follow-up, or reschedule"
                                 >
                                   {actionInfo.label}
                                 </button>
-                              )}
-                            </td>
-                            <td style={tableCellStyle}>
-                              {formatDateOnly(getAuditFollowUpDueDate(audit.auditId)) || (
-                                <span style={{ color: "#adb5bd" }}>—</span>
-                              )}
-                            </td>
-                            <td style={tableCellStyle}>
-                              {missed ? (
-                                <button
-                                  onClick={() => openRescheduleForm(audit.auditId)}
-                                  style={{
-                                    backgroundColor: "#dc3545",
-                                    color: "#fff",
-                                    border: "none",
-                                    padding: "7px 12px",
-                                    borderRadius: "6px",
-                                    cursor: "pointer",
-                                    fontSize: "13.5px",
-                                    fontWeight: "600"
-                                  }}
-                                >
-                                  Reschedule
-                                </button>
-                              ) : (
-                                <span style={{ color: "#adb5bd" }}>—</span>
                               )}
                             </td>
                           </tr>
