@@ -12,7 +12,8 @@ import {
 } from "./api";
 
 function App() {
-  const [activeTab, setActiveTab] = useState("planning");
+  // Sidebar sections: "createAudit" | "schedule" | "followup" | "actions" | "actionPlan"
+  const [activeSection, setActiveSection] = useState("schedule");
 
   // "all" | "today" | "upcoming" | "missed" | "custom"
   const [auditDateFilter, setAuditDateFilter] = useState("all");
@@ -34,15 +35,21 @@ function App() {
   const [audits, setAudits] = useState([]);
   const [remarkDrafts, setRemarkDrafts] = useState({});
 
+  // ---- reschedule state ----
+  const [rescheduleAuditId, setRescheduleAuditId] = useState(null);
+  const [rescheduleForm, setRescheduleForm] = useState({ newDateTime: "", reason: "" });
+
+  // ---- Followup form (new finding + followup, single cycle) ----
   const [findingForm, setFindingForm] = useState({
     auditId: "",
     findingId: "",
     finding: "",
-    mode: "new"
+    mode: "new" // "new" | "followup"
   });
   const [findingPhotoFiles, setFindingPhotoFiles] = useState([]);
-  const [followUpFindingPhotoFiles, setFollowUpFindingPhotoFiles] = useState([]);
+  const [followUpPhotoFiles, setFollowUpPhotoFiles] = useState([]);
   const [findings, setFindings] = useState([]);
+  const [findingFilter, setFindingFilter] = useState("all"); // all | pending | submitted
 
   const [actionForm, setActionForm] = useState({
     auditId: "",
@@ -106,7 +113,7 @@ function App() {
 
   // Adds 15 days to whatever timestamp is passed in (time-of-day ignored).
   // Used to compute the follow-up due date from the moment the doer
-  // actually submits the first follow-up evidence — NOT from the audit date.
+  // actually submits the follow-up evidence — NOT from the audit date.
   const calculateFollowUpDate = (timestamp) => {
     if (!timestamp) return "";
 
@@ -170,17 +177,17 @@ function App() {
     return [];
   };
 
+  // Evidence photos taken at the time the finding was raised.
   const getFindingPhotoUrls = (finding) => {
     if (!finding) return [];
     return normalizePhotoArray(finding.photoUrls?.length ? finding.photoUrls : finding.photoUrl);
   };
 
+  // Follow-up evidence.
   const getFollowUpPhotoUrls = (finding) => {
     if (!finding) return [];
     return normalizePhotoArray(
-      finding.followUpPhotoUrls?.length
-        ? finding.followUpPhotoUrls
-        : finding.followUpPhotoUrl
+      finding.followUpPhotoUrls?.length ? finding.followUpPhotoUrls : finding.followUpPhotoUrl
     );
   };
 
@@ -198,17 +205,21 @@ function App() {
   const getFindingsForAudit = (auditId) =>
     findings.filter((f) => f.auditId === auditId);
 
+  const hasFollowUp = (finding) => getFollowUpPhotoUrls(finding).length > 0;
+
   // A single finding is "Closed" only once BOTH the finding photo(s)
   // AND the follow-up photo(s) have been posted. Otherwise it's "Open".
   const getFindingClosureStatus = (finding) => {
     const hasFindingPhotos = getFindingPhotoUrls(finding).length > 0;
-    const hasFollowUpPhotos = getFollowUpPhotoUrls(finding).length > 0;
-    return hasFindingPhotos && hasFollowUpPhotos ? "Closed" : "Open";
+    return hasFindingPhotos && hasFollowUp(finding) ? "Closed" : "Open";
   };
 
-  // Schedule status for a finding, once the first follow-up has been saved:
+  // Status shown in the Followup tab list.
+  const getFollowUpState = (finding) => (hasFollowUp(finding) ? "Submitted" : "Pending");
+
+  // Schedule status for a finding, once the follow-up has been saved:
   // - "Closed": finding is fully closed out (finding + follow-up photos both present)
-  // - "Open": first follow-up hasn't been submitted yet, so no followUpDate exists
+  // - "Open": follow-up hasn't been submitted yet, so no followUpDate exists
   // - "Upcoming": follow-up date hasn't arrived yet
   // - "Overdue": follow-up date has passed and it's still not closed
   const getFindingScheduleStatus = (finding) => {
@@ -246,7 +257,7 @@ function App() {
     if (!relatedFindings.length) {
       return {
         status: "Pending",
-        label: "1st Finding Pending"
+        label: "Finding Pending"
       };
     }
 
@@ -272,11 +283,13 @@ function App() {
       Closed: { bg: "#d1e7dd", color: "#0f5132" },
       Open: { bg: "#fff3cd", color: "#664d03" },
       Pending: { bg: "#e2e3e5", color: "#41464b" },
+      Submitted: { bg: "#d1e7dd", color: "#0f5132" },
       Upcoming: { bg: "#cfe2ff", color: "#084298" },
       Today: { bg: "#fff3cd", color: "#997404" },
       Missed: { bg: "#f8d7da", color: "#842029" },
       Overdue: { bg: "#f8d7da", color: "#842029" },
-      Past: { bg: "#f8f9fa", color: "#6c757d" }
+      Past: { bg: "#f8f9fa", color: "#6c757d" },
+      Rescheduled: { bg: "#e0cffc", color: "#4b2e83" }
     };
     const c = map[status] || map.Pending;
     return {
@@ -306,9 +319,11 @@ function App() {
 
   const isTodayAudit = (auditDateTime) => isSameDay(auditDateTime, new Date());
 
-  // Checks whether a date falls within the given "YYYY-MM" month string
+  // Checks whether a date falls within the given "YYYY-MM" month string.
+  // No month selected = show all months.
   const isInStatsMonth = (auditDateTime, monthStr) => {
-    if (!auditDateTime || !monthStr) return false;
+    if (!monthStr) return true;
+    if (!auditDateTime) return false;
     const d = new Date(auditDateTime);
     if (isNaN(d.getTime())) return false;
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -321,7 +336,7 @@ function App() {
   // Missed/Upcoming on THAT due date rather than the audit's own
   // (already-past) scheduled date. Only fall back to the audit's own
   // date when there's no finding yet, or a finding exists but no
-  // follow-up date has been set yet (first follow-up not submitted).
+  // follow-up date has been set yet (follow-up not submitted).
   const getAuditScheduleStatus = (audit) => {
     const closureStatus = getAuditClosureStatus(audit.auditId);
 
@@ -381,7 +396,7 @@ function App() {
   ).length;
 
   // Counts for the two flavours of pending, used in the summary strip
-  const firstFindingPendingCount = statsMonthAudits.filter(
+  const findingPendingCount = statsMonthAudits.filter(
     (a) => getAuditActionInfo(a.auditId).status === "Pending"
   ).length;
 
@@ -390,10 +405,11 @@ function App() {
   ).length;
 
   const filteredAudits = sortedAudits.filter((audit) => {
+    if (!isInStatsMonth(audit.auditDateTime, statsMonth)) return false;
     if (auditDateFilter === "today") return isTodayAudit(audit.auditDateTime);
     if (auditDateFilter === "upcoming") return isUpcomingAudit(audit.auditDateTime);
     if (auditDateFilter === "missed") return isMissedAudit(audit);
-    if (auditDateFilter === "firstFindingPending")
+    if (auditDateFilter === "findingPending")
       return getAuditActionInfo(audit.auditId).status === "Pending";
     if (auditDateFilter === "followUpPending")
       return getAuditActionInfo(audit.auditId).status === "Open";
@@ -469,7 +485,7 @@ function App() {
       mode: "new"
     });
     setFindingPhotoFiles([]);
-    setFollowUpFindingPhotoFiles([]);
+    setFollowUpPhotoFiles([]);
   };
 
   const resetActionForm = () => {
@@ -496,9 +512,9 @@ function App() {
     setFindingPhotoFiles(files);
   };
 
-  const handleFollowUpFindingPhotoChange = (e) => {
+  const handleFollowUpPhotoChange = (e) => {
     const files = Array.from(e.target.files || []);
-    setFollowUpFindingPhotoFiles(files);
+    setFollowUpPhotoFiles(files);
   };
 
   const filteredFindingsForSelectedAuditInFinding = findings.filter(
@@ -651,6 +667,72 @@ function App() {
     }
   };
 
+  // ---- Reschedule flow ----
+  const openRescheduleForm = (auditId) => {
+    setRescheduleAuditId(auditId);
+    setRescheduleForm({ newDateTime: "", reason: "" });
+  };
+
+  const closeRescheduleForm = () => {
+    setRescheduleAuditId(null);
+    setRescheduleForm({ newDateTime: "", reason: "" });
+  };
+
+  const handleRescheduleFormChange = (e) => {
+    const { name, value } = e.target;
+    setRescheduleForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // NOTE ON BACKEND: this writes `previousAuditDateTime`, `rescheduleReason`
+  // and `rescheduleCount` onto the audit row so a history is kept. The
+  // Audit_Master sheet + apiSaveAudit handler need matching columns:
+  // "Previous Audit Date Time", "Reschedule Reason", "Reschedule Count".
+  const handleSaveReschedule = async () => {
+    if (!rescheduleForm.newDateTime) {
+      alert("Pick the new audit date & time");
+      return;
+    }
+    if (!rescheduleForm.reason.trim()) {
+      alert("Enter a reason for rescheduling");
+      return;
+    }
+
+    const audit = audits.find((a) => a.auditId === rescheduleAuditId);
+    if (!audit) {
+      alert("Audit not found");
+      return;
+    }
+
+    try {
+      const res = await apiSaveAudit({
+        auditId: audit.auditId,
+        auditDateTime: rescheduleForm.newDateTime,
+        startTime: audit.startTime,
+        endTime: audit.endTime,
+        auditorName: audit.auditorName,
+        auditeeName: audit.auditeeName,
+        departmentName: audit.departmentName,
+        observer: audit.observer || "",
+        remark: audit.remark || "",
+        previousAuditDateTime: audit.auditDateTime,
+        rescheduleReason: rescheduleForm.reason.trim(),
+        rescheduleCount: (audit.rescheduleCount || 0) + 1
+      });
+
+      if (!res || res.success !== true) {
+        alert("Failed to reschedule audit: " + (res?.error || "Unknown error"));
+        return;
+      }
+
+      alert("Audit rescheduled to " + formatDateOnly(rescheduleForm.newDateTime));
+      closeRescheduleForm();
+      await loadAuditsFromSheet();
+    } catch (err) {
+      console.error(err);
+      alert("Error rescheduling audit: " + err.message);
+    }
+  };
+
   const handleFindingInputChange = (e) => {
     const { name, value } = e.target;
 
@@ -665,7 +747,7 @@ function App() {
         updated.findingId = "";
         updated.finding = "";
         setFindingPhotoFiles([]);
-        setFollowUpFindingPhotoFiles([]);
+        setFollowUpPhotoFiles([]);
       }
 
       if (name === "auditId") {
@@ -707,7 +789,7 @@ function App() {
 
         // No follow-up has happened yet on a brand-new finding, so the
         // follow-up due date isn't known until the doer actually submits
-        // the first follow-up evidence (see the "followup" branch below).
+        // the follow-up evidence (see the "followup" branch below).
         const res = await apiSaveFinding({
           auditId: findingForm.auditId,
           auditDate: formatDateOnly(audit.auditDateTime),
@@ -724,6 +806,7 @@ function App() {
 
         alert("Finding Saved: " + res.findingId);
       } else {
+        // mode === "followup"
         if (!findingForm.findingId) {
           alert("Select Finding ID");
           return;
@@ -734,21 +817,23 @@ function App() {
           return;
         }
 
-        if (!followUpFindingPhotoFiles.length) {
+        if (!followUpPhotoFiles.length) {
           alert("Select at least one Follow-up Evidence Photo");
           return;
         }
 
         const existingPhotoUrls = getFindingPhotoUrls(selectedFindingInFindingTab);
         const uploadedFollowUpPhotoUrls = await uploadMultipleFiles(
-          followUpFindingPhotoFiles,
+          followUpPhotoFiles,
           "Audit_Photos"
         );
 
-        // Follow-up due date = 15 days from THIS submission's timestamp
-        // (the moment the doer saves the first follow-up report),
-        // not from the original audit date.
-        const followUpDate = calculateFollowUpDate(new Date());
+        // The moment the doer actually submits the follow-up — kept as its
+        // own field so the list can show exactly when this step happened.
+        const followUpSubmittedAt = new Date();
+
+        // Follow-up due date = 15 days from that same submission.
+        const followUpDate = calculateFollowUpDate(followUpSubmittedAt);
 
         const res = await apiSaveFinding({
           findingId: findingForm.findingId,
@@ -757,6 +842,7 @@ function App() {
           finding: selectedFindingInFindingTab.finding || "",
           photoUrls: existingPhotoUrls,
           followUpPhotoUrls: uploadedFollowUpPhotoUrls,
+          followUpSubmittedDate: followUpSubmittedAt.toISOString(),
           followUpDate,
           mode: "followup"
         });
@@ -936,47 +1022,77 @@ function App() {
     );
   };
 
+  // Findings for the Followup tab list, filtered by pending/submitted.
+  const followUpListFindings = findings.filter((f) => {
+    if (findingFilter === "pending") return !hasFollowUp(f);
+    if (findingFilter === "submitted") return hasFollowUp(f);
+    return true;
+  });
+
+  const sidebarItems = [
+    { id: "createAudit", label: "Schedule Audit" },
+    { id: "schedule", label: "All Schedule" },
+    { id: "followup", label: "Followup" },
+    { id: "actions", label: "CAPA" },
+    { id: "actionPlan", label: "Action Plan" }
+  ];
+
   return (
-          <div
+    <div style={{ background: "#f5f7fa", minHeight: "100vh", display: "flex" }}>
+      {/* ---- Left Sidebar ---- */}
+      <div
+        style={{
+          width: "230px",
+          flexShrink: 0,
+          background: "#fff",
+          borderRight: "1px solid #dee2e6",
+          minHeight: "100vh",
+          padding: "20px 0",
+          boxSizing: "border-box"
+        }}
+      >
+        <h3
           style={{
-            background: "#f5f7fa",
-            minHeight: "100vh",
-            padding: "clamp(10px,2vw,22px)"
+            fontSize: "18px",
+            fontWeight: "700",
+            color: "#000",
+            padding: "0 20px",
+            marginBottom: "18px"
           }}
         >
-      <div style={{ width: "100%", margin: "0 auto", boxSizing: "border-box" }}>
+          Audit Manager
+        </h3>
+        {sidebarItems.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setActiveSection(item.id)}
+            style={{
+              display: "block",
+              width: "100%",
+              textAlign: "left",
+              padding: "13px 20px",
+              border: "none",
+              borderLeft:
+                activeSection === item.id ? "4px solid #0d6efd" : "4px solid transparent",
+              background: activeSection === item.id ? "#eef5ff" : "transparent",
+              color: activeSection === item.id ? "#0d6efd" : "#212529",
+              fontWeight: activeSection === item.id ? "700" : "500",
+              fontSize: "15.5px",
+              cursor: "pointer"
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ---- Main Content ---- */}
+      <div style={{ flex: 1, padding: "clamp(10px,2vw,22px)", boxSizing: "border-box", minWidth: 0 }}>
         <h2 style={{ fontWeight: "700", marginBottom: "20px", fontSize: "28px", color: "#000" }}>
           Audit Management System
         </h2>
 
-        <div style={{ borderBottom: "1px solid #dee2e6", marginBottom: "20px" }}>
-          <button
-            onClick={() => setActiveTab("planning")}
-            style={tabButton(activeTab === "planning")}
-          >
-            Audit Planning
-          </button>
-          <button
-            onClick={() => setActiveTab("findings")}
-            style={tabButton(activeTab === "findings")}
-          >
-            Findings
-          </button>
-          <button
-            onClick={() => setActiveTab("actions")}
-            style={tabButton(activeTab === "actions")}
-          >
-            CAPA
-          </button>
-          <button
-            onClick={() => setActiveTab("actionPlan")}
-            style={tabButton(activeTab === "actionPlan")}
-          >
-            Action Plan
-          </button>
-        </div>
-
-        {activeTab === "planning" && (
+        {activeSection === "createAudit" && (
           <div>
             <div
               style={{
@@ -1090,7 +1206,11 @@ function App() {
                 Save Audit
               </button>
             </div>
+          </div>
+        )}
 
+        {activeSection === "schedule" && (
+          <div>
             {/* Month-scoped summary strip - click a tile to apply that filter below */}
             <div
               style={{
@@ -1115,6 +1235,22 @@ function App() {
                   color: "#000"
                 }}
               />
+              {statsMonth && (
+                <button
+                  onClick={() => setStatsMonth("")}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #ced4da",
+                    background: "#fff",
+                    color: "#6c757d",
+                    cursor: "pointer",
+                    fontSize: "14px"
+                  }}
+                >
+                  All Months
+                </button>
+              )}
             </div>
 
             <div
@@ -1180,7 +1316,7 @@ function App() {
               </div>
 
               <div
-                onClick={() => setAuditDateFilter("firstFindingPending")}
+                onClick={() => setAuditDateFilter("findingPending")}
                 style={{
                   background: "#fff",
                   borderRadius: "12px",
@@ -1188,14 +1324,14 @@ function App() {
                   padding: "16px 20px",
                   cursor: "pointer",
                   border:
-                    auditDateFilter === "firstFindingPending"
+                    auditDateFilter === "findingPending"
                       ? "2px solid #41464b"
                       : "2px solid transparent"
                 }}
               >
-                <div style={{ fontSize: "15px", color: "#495057" }}>1st Finding Pending</div>
+                <div style={{ fontSize: "15px", color: "#495057" }}>Finding Pending</div>
                 <div style={{ fontSize: "28px", fontWeight: "700", color: "#41464b" }}>
-                  {firstFindingPendingCount}
+                  {findingPendingCount}
                 </div>
               </div>
 
@@ -1264,10 +1400,10 @@ function App() {
                   Missed
                 </button>
                 <button
-                  style={filterChipStyle(auditDateFilter === "firstFindingPending", "#41464b")}
-                  onClick={() => setAuditDateFilter("firstFindingPending")}
+                  style={filterChipStyle(auditDateFilter === "findingPending", "#41464b")}
+                  onClick={() => setAuditDateFilter("findingPending")}
                 >
-                  1st Finding Pending
+                  Finding Pending
                 </button>
                 <button
                   style={filterChipStyle(auditDateFilter === "followUpPending", "#997404")}
@@ -1315,11 +1451,83 @@ function App() {
                 )}
               </div>
 
+              {/* Inline reschedule panel */}
+              {rescheduleAuditId && (
+                <div
+                  style={{
+                    background: "#fff8e1",
+                    border: "1px solid #ffe08a",
+                    borderRadius: "10px",
+                    padding: "16px",
+                    marginBottom: "15px",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))",
+                    gap: "14px",
+                    alignItems: "end"
+                  }}
+                >
+                  <div style={{ gridColumn: "1 / -1", fontWeight: "700", color: "#664d03" }}>
+                    Reschedule {rescheduleAuditId}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <label style={{ fontSize: "15px", color: "#000" }}>New Audit Date Time</label>
+                    <input
+                      type="datetime-local"
+                      name="newDateTime"
+                      value={rescheduleForm.newDateTime}
+                      onChange={handleRescheduleFormChange}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", gridColumn: "span 2" }}>
+                    <label style={{ fontSize: "15px", color: "#000" }}>Reason for Reschedule</label>
+                    <input
+                      type="text"
+                      name="reason"
+                      placeholder="e.g. Auditee on leave"
+                      value={rescheduleForm.reason}
+                      onChange={handleRescheduleFormChange}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <button
+                      onClick={handleSaveReschedule}
+                      style={{
+                        backgroundColor: "#0d6efd",
+                        color: "#fff",
+                        border: "none",
+                        padding: "12px 18px",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        fontSize: "15px"
+                      }}
+                    >
+                      Confirm Reschedule
+                    </button>
+                    <button
+                      onClick={closeRescheduleForm}
+                      style={{
+                        backgroundColor: "#fff",
+                        color: "#495057",
+                        border: "1px solid #ced4da",
+                        padding: "12px 18px",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        fontSize: "15px"
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <table style={{ width: "100%", tableLayout: "auto", borderCollapse: "collapse" }}>
                   <colgroup>
-                    <col style={{ width: "10%" }} />
-                    <col style={{ width: "10%" }} />
+                    <col style={{ width: "9%" }} />
+                    <col style={{ width: "9%" }} />
                     <col style={{ width: "8%" }} />
                     <col style={{ width: "9%" }} />
                     <col style={{ width: "10%" }} />
@@ -1327,7 +1535,8 @@ function App() {
                     <col style={{ width: "9%" }} />
                     <col style={{ width: "12%" }} />
                     <col style={{ width: "8%" }} />
-                    <col style={{ width: "16%" }} />
+                    <col style={{ width: "14%" }} />
+                    <col style={{ width: "10%" }} />
                   </colgroup>
                   <thead>
                     <tr style={{ background: "#212529", color: "#fff" }}>
@@ -1341,13 +1550,14 @@ function App() {
                       <th style={tableCellEllipsisStyle}>Remark</th>
                       <th style={tableCellEllipsisStyle}>Schedule</th>
                       <th style={tableCellEllipsisStyle}>Action Needed</th>
+                      <th style={tableCellEllipsisStyle}>Reschedule</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredAudits.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="10"
+                          colSpan="11"
                           style={{
                             ...tableCellStyle,
                             textAlign: "center",
@@ -1384,6 +1594,13 @@ function App() {
                             </td>
                             <td style={tableCellEllipsisStyle}>
                               {formatDateOnly(audit.auditDateTime)}
+                              {audit.rescheduleCount > 0 && (
+                                <div style={{ marginTop: "4px" }}>
+                                  <span style={statusBadgeStyle("Rescheduled")}>
+                                    Rescheduled ({audit.rescheduleCount}x)
+                                  </span>
+                                </div>
+                              )}
                             </td>
                             <td style={tableCellEllipsisStyle}>
                               {formatTimeOnly(audit.startTime)}-{formatTimeOnly(audit.endTime)}
@@ -1465,6 +1682,27 @@ function App() {
                                 {actionInfo.label}
                               </span>
                             </td>
+                            <td style={tableCellStyle}>
+                              {missed ? (
+                                <button
+                                  onClick={() => openRescheduleForm(audit.auditId)}
+                                  style={{
+                                    backgroundColor: "#dc3545",
+                                    color: "#fff",
+                                    border: "none",
+                                    padding: "7px 12px",
+                                    borderRadius: "6px",
+                                    cursor: "pointer",
+                                    fontSize: "13.5px",
+                                    fontWeight: "600"
+                                  }}
+                                >
+                                  Reschedule
+                                </button>
+                              ) : (
+                                <span style={{ color: "#adb5bd" }}>—</span>
+                              )}
+                            </td>
                           </tr>
                         );
                       })
@@ -1476,7 +1714,7 @@ function App() {
           </div>
         )}
 
-        {activeTab === "findings" && (
+        {activeSection === "followup" && (
           <div>
             <div
               style={{
@@ -1487,7 +1725,9 @@ function App() {
                 marginBottom: "20px"
               }}
             >
-              <h3 style={{ marginBottom: "15px", fontSize: "22px", color: "#000" }}>Findings</h3>
+              <h3 style={{ marginBottom: "15px", fontSize: "22px", color: "#000" }}>
+                New Finding &amp; Followup
+              </h3>
 
               <div
                 style={{
@@ -1537,11 +1777,13 @@ function App() {
                       style={{ ...inputStyle, marginTop: "5px" }}
                     >
                       <option value="">Select Finding ID</option>
-                      {filteredFindingsForSelectedAuditInFinding.map((f) => (
-                        <option key={f.findingId} value={f.findingId}>
-                          {f.findingId}
-                        </option>
-                      ))}
+                      {filteredFindingsForSelectedAuditInFinding
+                        .filter((f) => !hasFollowUp(f))
+                        .map((f) => (
+                          <option key={f.findingId} value={f.findingId}>
+                            {f.findingId}
+                          </option>
+                        ))}
                     </select>
                   </div>
                 )}
@@ -1605,12 +1847,12 @@ function App() {
                         type="file"
                         accept="image/*"
                         multiple
-                        onChange={handleFollowUpFindingPhotoChange}
+                        onChange={handleFollowUpPhotoChange}
                         style={{ ...inputStyle, marginTop: "5px" }}
                       />
-                      {!!followUpFindingPhotoFiles.length && (
+                      {!!followUpPhotoFiles.length && (
                         <div style={{ marginTop: "8px", color: "#6c757d", fontSize: "14px" }}>
-                          {followUpFindingPhotoFiles.length} file(s) selected
+                          {followUpPhotoFiles.length} file(s) selected
                         </div>
                       )}
                     </div>
@@ -1642,48 +1884,46 @@ function App() {
                 padding: "20px"
               }}
             >
-              <h4 style={{ marginBottom: "15px", fontSize: "19px", color: "#000" }}>Findings List</h4>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginBottom: "15px" }}>
+                <h4 style={{ margin: 0, marginRight: "10px", fontSize: "19px", color: "#000" }}>Findings — Followup</h4>
+                <button style={filterChipStyle(findingFilter === "all")} onClick={() => setFindingFilter("all")}>All</button>
+                <button style={filterChipStyle(findingFilter === "pending", "#997404")} onClick={() => setFindingFilter("pending")}>Pending</button>
+                <button style={filterChipStyle(findingFilter === "submitted", "#0f5132")} onClick={() => setFindingFilter("submitted")}>Submitted</button>
+              </div>
               <div>
                 <table style={{ width: "100%", tableLayout: "auto", borderCollapse: "collapse" }}>
                   <colgroup>
-                    <col style={{ width: "9%" }} />
-                    <col style={{ width: "9%" }} />
-                    <col style={{ width: "10%" }} />
-                    <col style={{ width: "28%" }} />
-                    <col style={{ width: "14%" }} />
-                    <col style={{ width: "14%" }} />
                     <col style={{ width: "8%" }} />
                     <col style={{ width: "8%" }} />
+                    <col style={{ width: "9%" }} />
+                    <col style={{ width: "24%" }} />
+                    <col style={{ width: "14%" }} />
+                    <col style={{ width: "14%" }} />
+                    <col style={{ width: "11%" }} />
+                    <col style={{ width: "12%" }} />
                   </colgroup>
                   <thead>
                     <tr style={{ background: "#212529" }}>
-                    <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Finding ID</th>
-                    <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Audit ID</th>
-                    <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Audit Date</th>
-                    <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Finding</th>
-                    <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Finding Photos</th>
-                    <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Follow-up Photos</th>
-                    <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Follow-up Date</th>
-                    <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Status</th>
-                  </tr>
+                      <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Finding ID</th>
+                      <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Audit ID</th>
+                      <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Audit Date</th>
+                      <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Finding</th>
+                      <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Finding Photos</th>
+                      <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Follow-up Photos</th>
+                      <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Follow-up Date</th>
+                      <th style={{ ...tableCellEllipsisStyle, color: "#fff" }}>Status</th>
+                    </tr>
                   </thead>
                   <tbody>
-                    {findings.length === 0 ? (
+                    {followUpListFindings.length === 0 ? (
                       <tr>
-                        <td
-                          colSpan="8"
-                          style={{
-                            ...tableCellStyle,
-                            textAlign: "center",
-                            color: "#6c757d"
-                          }}
-                        >
-                          No findings found
+                        <td colSpan="8" style={{ ...tableCellStyle, textAlign: "center", color: "#6c757d" }}>
+                          No findings match this filter
                         </td>
                       </tr>
                     ) : (
-                      findings.map((f) => {
-                        const status = getFindingScheduleStatus(f);
+                      followUpListFindings.map((f) => {
+                        const state = getFollowUpState(f);
                         return (
                           <tr key={f.findingId}>
                             <td style={tableCellEllipsisStyle} title={f.findingId}>{f.findingId}</td>
@@ -1697,10 +1937,10 @@ function App() {
                               {renderPhotoLinks(getFollowUpPhotoUrls(f), "View Follow-up Photo")}
                             </td>
                             <td style={tableCellStyle}>
-                              {formatDateOnly(f.followUpDate)}
+                              {formatDateOnly(f.followUpSubmittedDate) || <span style={{ color: "#6c757d" }}>—</span>}
                             </td>
                             <td style={tableCellStyle}>
-                              <span style={statusBadgeStyle(status)}>{status}</span>
+                              <span style={statusBadgeStyle(state)}>{state}</span>
                             </td>
                           </tr>
                         );
@@ -1713,7 +1953,7 @@ function App() {
           </div>
         )}
 
-        {activeTab === "actions" && (
+        {activeSection === "actions" && (
           <div>
             <div
               style={{
@@ -1873,7 +2113,7 @@ function App() {
           </div>
         )}
 
-        {activeTab === "actionPlan" && (
+        {activeSection === "actionPlan" && (
           <div>
             <div
               style={{
@@ -2102,17 +2342,6 @@ function App() {
     </div>
   );
 }
-
-const tabButton = (active) => ({
-  padding: "12px 20px",
-  border: "none",
-  borderBottom: active ? "3px solid #0d6efd" : "3px solid transparent",
-  background: "transparent",
-  cursor: "pointer",
-  fontWeight: active ? "700" : "500",
-  fontSize: "17px",
-  color: active ? "#0d6efd" : "#000"
-});
 
 const inputStyle = {
   width: "100%",
