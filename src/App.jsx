@@ -1645,10 +1645,9 @@ function App() {
                     {qaMissed && (
                       <div
                         style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))",
-                          gap: "14px",
-                          alignItems: "end",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "12px",
                           background: "#fff8e1",
                           border: "1px solid #ffe08a",
                           borderRadius: "8px",
@@ -1656,7 +1655,7 @@ function App() {
                           marginBottom: "16px"
                         }}
                       >
-                        <div style={{ gridColumn: "1 / -1", fontWeight: "700", color: "#664d03" }}>
+                        <div style={{ fontWeight: "700", color: "#664d03" }}>
                           Reschedule this audit
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -1669,7 +1668,7 @@ function App() {
                             style={inputStyle}
                           />
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", gridColumn: "span 2" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                           <label style={{ fontSize: "15px", color: "#000" }}>Reason for Reschedule</label>
                           <input
                             type="text"
@@ -1680,46 +1679,28 @@ function App() {
                             style={inputStyle}
                           />
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                          <label style={{ fontSize: "15px", color: "transparent", userSelect: "none" }}>
-                            Reschedule
-                          </label>
-                          <button
-                            onClick={handleSaveReschedule}
-                            style={{
-                              backgroundColor: "#0d6efd",
-                              color: "#fff",
-                              border: "none",
-                              padding: "12px 18px",
-                              borderRadius: "8px",
-                              cursor: "pointer",
-                              fontSize: "15px"
-                            }}
-                          >
-                            Confirm Reschedule
-                          </button>
-                        </div>
+                        <button
+                          onClick={handleSaveReschedule}
+                          style={{
+                            backgroundColor: "#0d6efd",
+                            color: "#fff",
+                            border: "none",
+                            padding: "12px 18px",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            fontSize: "15px",
+                            alignSelf: "flex-start"
+                          }}
+                        >
+                          Confirm Reschedule
+                        </button>
                       </div>
                     )}
 
                     {qaInfo.status !== "Closed" && (
                       qaInfo.status === "Pending" ? (
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))",
-                            gap: "14px",
-                            alignItems: "end"
-                          }}
-                        >
-                          <div
-                            style={{
-                              gridColumn: "1 / -1",
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "6px"
-                            }}
-                          >
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                             <label style={{ fontSize: "15px", color: "#000" }}>Finding</label>
                             <textarea
                               rows={2}
@@ -1728,51 +1709,40 @@ function App() {
                               style={textareaStyle}
                             />
                           </div>
-                          <div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                             <label style={{ fontSize: "15px", color: "#000" }}>Evidence Photos</label>
                             <input
                               type="file"
                               accept="image/*"
                               multiple
                               onChange={handleQuickFindingPhotoChange}
-                              style={{ ...inputStyle, marginTop: "5px" }}
+                              style={inputStyle}
                             />
                             {!!quickFindingPhotoFiles.length && (
-                              <div style={{ marginTop: "6px", color: "#6c757d", fontSize: "13px" }}>
+                              <div style={{ color: "#6c757d", fontSize: "13px" }}>
                                 {quickFindingPhotoFiles.length} file(s) selected
                               </div>
                             )}
                           </div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                            <label style={{ fontSize: "15px", color: "transparent", userSelect: "none" }}>
-                              Save
-                            </label>
-                            <button
-                              onClick={handleQuickSaveNewFinding}
-                              style={{
-                                backgroundColor: "#198754",
-                                color: "#fff",
-                                border: "none",
-                                padding: "12px 18px",
-                                borderRadius: "8px",
-                                cursor: "pointer",
-                                fontSize: "15px"
-                              }}
-                            >
-                              Save Finding
-                            </button>
-                          </div>
+                          <button
+                            onClick={handleQuickSaveNewFinding}
+                            style={{
+                              backgroundColor: "#198754",
+                              color: "#fff",
+                              border: "none",
+                              padding: "12px 18px",
+                              borderRadius: "8px",
+                              cursor: "pointer",
+                              fontSize: "15px",
+                              alignSelf: "flex-start"
+                            }}
+                          >
+                            Save Finding
+                          </button>
                         </div>
                       ) : (
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))",
-                            gap: "14px",
-                            alignItems: "end"
-                          }}
-                        >
-                          <div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                             <label style={{ fontSize: "15px", color: "#000" }}>Finding</label>
                             <select
                               value={quickFollowUpFindingId}
@@ -1787,40 +1757,36 @@ function App() {
                               ))}
                             </select>
                           </div>
-                          <div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                             <label style={{ fontSize: "15px", color: "#000" }}>Follow-up Evidence Photos</label>
                             <input
                               type="file"
                               accept="image/*"
                               multiple
                               onChange={handleQuickFollowUpPhotoChange}
-                              style={{ ...inputStyle, marginTop: "5px" }}
+                              style={inputStyle}
                             />
                             {!!quickFollowUpPhotoFiles.length && (
-                              <div style={{ marginTop: "6px", color: "#6c757d", fontSize: "13px" }}>
+                              <div style={{ color: "#6c757d", fontSize: "13px" }}>
                                 {quickFollowUpPhotoFiles.length} file(s) selected
                               </div>
                             )}
                           </div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                            <label style={{ fontSize: "15px", color: "transparent", userSelect: "none" }}>
-                              Save
-                            </label>
-                            <button
-                              onClick={handleQuickSaveFollowUp}
-                              style={{
-                                backgroundColor: "#198754",
-                                color: "#fff",
-                                border: "none",
-                                padding: "12px 18px",
-                                borderRadius: "8px",
-                                cursor: "pointer",
-                                fontSize: "15px"
-                              }}
-                            >
-                              Save Follow-up
-                            </button>
-                          </div>
+                          <button
+                            onClick={handleQuickSaveFollowUp}
+                            style={{
+                              backgroundColor: "#198754",
+                              color: "#fff",
+                              border: "none",
+                              padding: "12px 18px",
+                              borderRadius: "8px",
+                              cursor: "pointer",
+                              fontSize: "15px",
+                              alignSelf: "flex-start"
+                            }}
+                          >
+                            Save Follow-up
+                          </button>
                         </div>
                       )
                     )}
