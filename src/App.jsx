@@ -1222,6 +1222,7 @@ function App() {
             style={{
               display: "block",
               width: "100%",
+              boxSizing: "border-box",
               textAlign: "left",
               padding: "13px 20px",
               border: "none",
@@ -1907,6 +1908,7 @@ function App() {
                                 }
                                 style={{
                                   width: "100%",
+                                  boxSizing: "border-box",
                                   padding: "6px",
                                   borderRadius: "6px",
                                   border: "1px solid #ced4da",
@@ -1948,6 +1950,7 @@ function App() {
                                 }
                                 style={{
                                   width: "100%",
+                                  boxSizing: "border-box",
                                   padding: "6px",
                                   borderRadius: "6px",
                                   border: "1px solid #ced4da",
@@ -2085,7 +2088,7 @@ function App() {
                         rows={3}
                         value={findingForm.finding}
                         onChange={handleFindingInputChange}
-                        style={textareaStyle}
+                        style={{ ...textareaStyle, marginTop: "5px" }}
                       />
                     </div>
 
@@ -2115,7 +2118,7 @@ function App() {
                         value={selectedFindingInFindingTab.finding || ""}
                         readOnly
                         rows={3}
-                        style={{ ...textareaStyle, background: "#f8f9fa" }}
+                        style={{ ...textareaStyle, marginTop: "5px", background: "#f8f9fa" }}
                       />
                     </div>
 
@@ -2320,7 +2323,7 @@ function App() {
                     name="action"
                     value={actionForm.action}
                     onChange={handleActionInputChange}
-                    style={textareaStyle}
+                    style={{ ...textareaStyle, marginTop: "5px" }}
                   />
                 </div>
 
@@ -2521,7 +2524,7 @@ function App() {
                     name="actionPlan"
                     value={actionPlanForm.actionPlan}
                     onChange={handleActionPlanInputChange}
-                    style={textareaStyle}
+                    style={{ ...textareaStyle, marginTop: "5px" }}
                   />
                 </div>
 
@@ -2668,6 +2671,7 @@ function App() {
 
 const inputStyle = {
   width: "100%",
+  boxSizing: "border-box",
   padding: "12px",
   borderRadius: "6px",
   border: "1px solid #ced4da",
@@ -2677,10 +2681,10 @@ const inputStyle = {
 
 const textareaStyle = {
   width: "100%",
+  boxSizing: "border-box",
   padding: "10px",
   borderRadius: "8px",
   border: "1px solid #ced4da",
-  marginTop: "5px",
   resize: "vertical",
   fontSize: "16px",
   color: "#000"
