@@ -39,6 +39,13 @@ function App() {
   const [rescheduleAuditId, setRescheduleAuditId] = useState(null);
   const [rescheduleForm, setRescheduleForm] = useState({ newDateTime: "", reason: "" });
 
+  // ---- quick action (save finding / follow-up directly from All Schedule) ----
+  const [quickActionAuditId, setQuickActionAuditId] = useState(null);
+  const [quickFindingText, setQuickFindingText] = useState("");
+  const [quickFindingPhotoFiles, setQuickFindingPhotoFiles] = useState([]);
+  const [quickFollowUpFindingId, setQuickFollowUpFindingId] = useState("");
+  const [quickFollowUpPhotoFiles, setQuickFollowUpPhotoFiles] = useState([]);
+
   // ---- Followup form (new finding + followup, single cycle) ----
   const [findingForm, setFindingForm] = useState({
     auditId: "",
@@ -276,6 +283,24 @@ function App() {
       status: "Open",
       label: `Follow-up Pending (${openFindings.length}/${relatedFindings.length})`
     };
+  };
+
+  // Earliest open follow-up due date for an audit, so the doer can see the
+  // upcoming pipeline directly in the Audit List without opening the
+  // Followup tab. Returns "" when there's nothing open or no due date yet.
+  const getAuditFollowUpDueDate = (auditId) => {
+    const relatedFindings = getFindingsForAudit(auditId);
+    const openWithDue = relatedFindings.filter(
+      (f) => getFindingClosureStatus(f) !== "Closed" && f.followUpDate
+    );
+    if (!openWithDue.length) return "";
+
+    const dueTimes = openWithDue
+      .map((f) => new Date(f.followUpDate).getTime())
+      .filter((t) => !isNaN(t));
+    if (!dueTimes.length) return "";
+
+    return new Date(Math.min(...dueTimes)).toISOString().split("T")[0];
   };
 
   const statusBadgeStyle = (status) => {
@@ -730,6 +755,126 @@ function App() {
     } catch (err) {
       console.error(err);
       alert("Error rescheduling audit: " + err.message);
+    }
+  };
+
+  // ---- Quick action: save finding / follow-up directly from a row in the
+  // Audit List, so the doer never has to leave "All Schedule" to log
+  // progress. Anything saved here shows up in the Followup tab too, since
+  // it's writing to the same findings data. ----
+  const openQuickAction = (auditId) => {
+    setQuickActionAuditId(auditId);
+    setQuickFindingText("");
+    setQuickFindingPhotoFiles([]);
+    setQuickFollowUpFindingId("");
+    setQuickFollowUpPhotoFiles([]);
+  };
+
+  const closeQuickAction = () => {
+    setQuickActionAuditId(null);
+    setQuickFindingText("");
+    setQuickFindingPhotoFiles([]);
+    setQuickFollowUpFindingId("");
+    setQuickFollowUpPhotoFiles([]);
+  };
+
+  const handleQuickFindingPhotoChange = (e) => {
+    setQuickFindingPhotoFiles(Array.from(e.target.files || []));
+  };
+
+  const handleQuickFollowUpPhotoChange = (e) => {
+    setQuickFollowUpPhotoFiles(Array.from(e.target.files || []));
+  };
+
+  const handleQuickSaveNewFinding = async () => {
+    const audit = audits.find((a) => a.auditId === quickActionAuditId);
+    if (!audit) {
+      alert("Audit not found");
+      return;
+    }
+    if (!quickFindingText) {
+      alert("Enter finding");
+      return;
+    }
+    if (!quickFindingPhotoFiles.length) {
+      alert("Select at least one Evidence Photo");
+      return;
+    }
+
+    try {
+      const uploadedPhotoUrls = await uploadMultipleFiles(quickFindingPhotoFiles, "Audit_Photos");
+      const res = await apiSaveFinding({
+        auditId: quickActionAuditId,
+        auditDate: formatDateOnly(audit.auditDateTime),
+        finding: quickFindingText,
+        photoUrls: uploadedPhotoUrls,
+        followUpPhotoUrls: [],
+        followUpDate: ""
+      });
+
+      if (!res || res.success !== true) {
+        alert("Finding save failed: " + (res?.error || "Unknown error"));
+        return;
+      }
+
+      alert("Finding Saved: " + res.findingId);
+      closeQuickAction();
+      await loadFindingsFromSheet();
+    } catch (err) {
+      console.error(err);
+      alert("Error saving finding: " + err.message);
+    }
+  };
+
+  const handleQuickSaveFollowUp = async () => {
+    const audit = audits.find((a) => a.auditId === quickActionAuditId);
+    if (!audit) {
+      alert("Audit not found");
+      return;
+    }
+    if (!quickFollowUpFindingId) {
+      alert("Select which finding this follow-up is for");
+      return;
+    }
+    const finding = findings.find((f) => f.findingId === quickFollowUpFindingId);
+    if (!finding) {
+      alert("Selected finding not found");
+      return;
+    }
+    if (!quickFollowUpPhotoFiles.length) {
+      alert("Select at least one Follow-up Evidence Photo");
+      return;
+    }
+
+    try {
+      const existingPhotoUrls = getFindingPhotoUrls(finding);
+      const uploadedFollowUpPhotoUrls = await uploadMultipleFiles(quickFollowUpPhotoFiles, "Audit_Photos");
+      const followUpSubmittedAt = new Date();
+      const followUpDate = calculateFollowUpDate(followUpSubmittedAt);
+
+      const res = await apiSaveFinding({
+        findingId: quickFollowUpFindingId,
+        auditId: quickActionAuditId,
+        auditDate: formatDateOnly(audit.auditDateTime),
+        finding: finding.finding || "",
+        photoUrls: existingPhotoUrls,
+        followUpPhotoUrls: uploadedFollowUpPhotoUrls,
+        followUpSubmittedDate: followUpSubmittedAt.toISOString(),
+        followUpDate,
+        mode: "followup"
+      });
+
+      if (!res || res.success !== true) {
+        alert("Follow-up save failed: " + (res?.error || "Unknown error"));
+        return;
+      }
+
+      alert("Follow-up Saved: " + quickFollowUpFindingId);
+      closeQuickAction();
+      await loadFindingsFromSheet();
+    } catch (err) {
+      console.error(err);
+      alert("Error saving follow-up: " + err.message);
     }
   };
 
@@ -1523,20 +1668,178 @@ function App() {
                 </div>
               )}
 
+              {/* Inline quick action panel — save finding / follow-up right from this list */}
+              {quickActionAuditId && (() => {
+                const qaInfo = getAuditActionInfo(quickActionAuditId);
+                const qaOpenFindings = getFindingsForAudit(quickActionAuditId).filter(
+                  (f) => getFindingClosureStatus(f) !== "Closed"
+                );
+                return (
+                  <div
+                    style={{
+                      background: "#eaf7f0",
+                      border: "1px solid #b7e4c7",
+                      borderRadius: "10px",
+                      padding: "16px",
+                      marginBottom: "15px"
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "12px"
+                      }}
+                    >
+                      <div style={{ fontWeight: "700", color: "#0f5132" }}>
+                        {qaInfo.status === "Pending"
+                          ? `Add Finding — ${quickActionAuditId}`
+                          : `Save Follow-up — ${quickActionAuditId}`}
+                      </div>
+                      <button
+                        onClick={closeQuickAction}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "#6c757d",
+                          fontSize: "14px"
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                    {qaInfo.status === "Pending" ? (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))",
+                          gap: "14px",
+                          alignItems: "end"
+                        }}
+                      >
+                        <div
+                          style={{
+                            gridColumn: "1 / -1",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "6px"
+                          }}
+                        >
+                          <label style={{ fontSize: "15px", color: "#000" }}>Finding</label>
+                          <textarea
+                            rows={2}
+                            value={quickFindingText}
+                            onChange={(e) => setQuickFindingText(e.target.value)}
+                            style={textareaStyle}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "15px", color: "#000" }}>Evidence Photos</label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handleQuickFindingPhotoChange}
+                            style={{ ...inputStyle, marginTop: "5px" }}
+                          />
+                          {!!quickFindingPhotoFiles.length && (
+                            <div style={{ marginTop: "6px", color: "#6c757d", fontSize: "13px" }}>
+                              {quickFindingPhotoFiles.length} file(s) selected
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={handleQuickSaveNewFinding}
+                          style={{
+                            backgroundColor: "#198754",
+                            color: "#fff",
+                            border: "none",
+                            padding: "12px 18px",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            fontSize: "15px"
+                          }}
+                        >
+                          Save Finding
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))",
+                          gap: "14px",
+                          alignItems: "end"
+                        }}
+                      >
+                        <div>
+                          <label style={{ fontSize: "15px", color: "#000" }}>Finding</label>
+                          <select
+                            value={quickFollowUpFindingId}
+                            onChange={(e) => setQuickFollowUpFindingId(e.target.value)}
+                            style={inputStyle}
+                          >
+                            <option value="">Select Finding ID</option>
+                            {qaOpenFindings.map((f) => (
+                              <option key={f.findingId} value={f.findingId}>
+                                {f.findingId} — {(f.finding || "").slice(0, 40)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "15px", color: "#000" }}>Follow-up Evidence Photos</label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handleQuickFollowUpPhotoChange}
+                            style={{ ...inputStyle, marginTop: "5px" }}
+                          />
+                          {!!quickFollowUpPhotoFiles.length && (
+                            <div style={{ marginTop: "6px", color: "#6c757d", fontSize: "13px" }}>
+                              {quickFollowUpPhotoFiles.length} file(s) selected
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={handleQuickSaveFollowUp}
+                          style={{
+                            backgroundColor: "#198754",
+                            color: "#fff",
+                            border: "none",
+                            padding: "12px 18px",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            fontSize: "15px"
+                          }}
+                        >
+                          Save Follow-up
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div>
                 <table style={{ width: "100%", tableLayout: "auto", borderCollapse: "collapse" }}>
                   <colgroup>
-                    <col style={{ width: "9%" }} />
-                    <col style={{ width: "9%" }} />
+                    <col style={{ width: "8%" }} />
+                    <col style={{ width: "8%" }} />
+                    <col style={{ width: "7%" }} />
                     <col style={{ width: "8%" }} />
                     <col style={{ width: "9%" }} />
-                    <col style={{ width: "10%" }} />
+                    <col style={{ width: "7%" }} />
                     <col style={{ width: "8%" }} />
-                    <col style={{ width: "9%" }} />
+                    <col style={{ width: "11%" }} />
+                    <col style={{ width: "7%" }} />
                     <col style={{ width: "12%" }} />
                     <col style={{ width: "8%" }} />
-                    <col style={{ width: "14%" }} />
-                    <col style={{ width: "10%" }} />
+                    <col style={{ width: "8%" }} />
                   </colgroup>
                   <thead>
                     <tr style={{ background: "#212529", color: "#fff" }}>
@@ -1550,14 +1853,16 @@ function App() {
                       <th style={tableCellEllipsisStyle}>Remark</th>
                       <th style={tableCellEllipsisStyle}>Schedule</th>
                       <th style={tableCellEllipsisStyle}>Action Needed</th>
+                      <th style={tableCellEllipsisStyle}>Follow-up Due</th>
                       <th style={tableCellEllipsisStyle}>Reschedule</th>
                     </tr>
+                    
                   </thead>
                   <tbody>
                     {filteredAudits.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="11"
+                          colSpan="12"
                           style={{
                             ...tableCellStyle,
                             textAlign: "center",
@@ -1678,9 +1983,28 @@ function App() {
                               </span>
                             </td>
                             <td style={tableCellStyle}>
-                              <span style={statusBadgeStyle(actionInfo.status)}>
-                                {actionInfo.label}
-                              </span>
+                              {actionInfo.status === "Closed" ? (
+                                <span style={statusBadgeStyle(actionInfo.status)}>
+                                  {actionInfo.label}
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => openQuickAction(audit.auditId)}
+                                  style={{
+                                    ...statusBadgeStyle(actionInfo.status),
+                                    border: "none",
+                                    cursor: "pointer"
+                                  }}
+                                  title="Click to save finding / follow-up for this audit"
+                                >
+                                  {actionInfo.label}
+                                </button>
+                              )}
+                            </td>
+                            <td style={tableCellStyle}>
+                              {formatDateOnly(getAuditFollowUpDueDate(audit.auditId)) || (
+                                <span style={{ color: "#adb5bd" }}>—</span>
+                              )}
                             </td>
                             <td style={tableCellStyle}>
                               {missed ? (
