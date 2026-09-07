@@ -1680,20 +1680,25 @@ function App() {
                             style={inputStyle}
                           />
                         </div>
-                        <button
-                          onClick={handleSaveReschedule}
-                          style={{
-                            backgroundColor: "#0d6efd",
-                            color: "#fff",
-                            border: "none",
-                            padding: "12px 18px",
-                            borderRadius: "8px",
-                            cursor: "pointer",
-                            fontSize: "15px"
-                          }}
-                        >
-                          Confirm Reschedule
-                        </button>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          <label style={{ fontSize: "15px", color: "transparent", userSelect: "none" }}>
+                            Reschedule
+                          </label>
+                          <button
+                            onClick={handleSaveReschedule}
+                            style={{
+                              backgroundColor: "#0d6efd",
+                              color: "#fff",
+                              border: "none",
+                              padding: "12px 18px",
+                              borderRadius: "8px",
+                              cursor: "pointer",
+                              fontSize: "15px"
+                            }}
+                          >
+                            Confirm Reschedule
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -1738,20 +1743,25 @@ function App() {
                               </div>
                             )}
                           </div>
-                          <button
-                            onClick={handleQuickSaveNewFinding}
-                            style={{
-                              backgroundColor: "#198754",
-                              color: "#fff",
-                              border: "none",
-                              padding: "12px 18px",
-                              borderRadius: "8px",
-                              cursor: "pointer",
-                              fontSize: "15px"
-                            }}
-                          >
-                            Save Finding
-                          </button>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                            <label style={{ fontSize: "15px", color: "transparent", userSelect: "none" }}>
+                              Save
+                            </label>
+                            <button
+                              onClick={handleQuickSaveNewFinding}
+                              style={{
+                                backgroundColor: "#198754",
+                                color: "#fff",
+                                border: "none",
+                                padding: "12px 18px",
+                                borderRadius: "8px",
+                                cursor: "pointer",
+                                fontSize: "15px"
+                              }}
+                            >
+                              Save Finding
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div
@@ -1792,20 +1802,25 @@ function App() {
                               </div>
                             )}
                           </div>
-                          <button
-                            onClick={handleQuickSaveFollowUp}
-                            style={{
-                              backgroundColor: "#198754",
-                              color: "#fff",
-                              border: "none",
-                              padding: "12px 18px",
-                              borderRadius: "8px",
-                              cursor: "pointer",
-                              fontSize: "15px"
-                            }}
-                          >
-                            Save Follow-up
-                          </button>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                            <label style={{ fontSize: "15px", color: "transparent", userSelect: "none" }}>
+                              Save
+                            </label>
+                            <button
+                              onClick={handleQuickSaveFollowUp}
+                              style={{
+                                backgroundColor: "#198754",
+                                color: "#fff",
+                                border: "none",
+                                padding: "12px 18px",
+                                borderRadius: "8px",
+                                cursor: "pointer",
+                                fontSize: "15px"
+                              }}
+                            >
+                              Save Follow-up
+                            </button>
+                          </div>
                         </div>
                       )
                     )}
@@ -1814,18 +1829,19 @@ function App() {
               })()}
 
               <div style={{ overflowX: "auto", maxWidth: "100%" }}>
-                <table style={{ width: "100%", minWidth: "900px", tableLayout: "auto", borderCollapse: "collapse" }}>
+                <table style={{ width: "100%", minWidth: "1000px", tableLayout: "auto", borderCollapse: "collapse" }}>
                   <colgroup>
-                    <col style={{ width: "9%" }} />
-                    <col style={{ width: "9%" }} />
+                    <col style={{ width: "8%" }} />
+                    <col style={{ width: "8%" }} />
+                    <col style={{ width: "7%" }} />
                     <col style={{ width: "8%" }} />
                     <col style={{ width: "9%" }} />
+                    <col style={{ width: "7%" }} />
+                    <col style={{ width: "8%" }} />
+                    <col style={{ width: "12%" }} />
+                    <col style={{ width: "7%" }} />
+                    <col style={{ width: "16%" }} />
                     <col style={{ width: "10%" }} />
-                    <col style={{ width: "8%" }} />
-                    <col style={{ width: "9%" }} />
-                    <col style={{ width: "13%" }} />
-                    <col style={{ width: "8%" }} />
-                    <col style={{ width: "17%" }} />
                   </colgroup>
                   <thead>
                     <tr style={{ background: "#212529", color: "#fff" }}>
@@ -1839,14 +1855,14 @@ function App() {
                       <th style={tableCellEllipsisStyle}>Remark</th>
                       <th style={tableCellEllipsisStyle}>Schedule</th>
                       <th style={tableCellEllipsisStyle}>Action Needed</th>
+                      <th style={tableCellEllipsisStyle}>Follow-up Due</th>
                     </tr>
-                    
                   </thead>
                   <tbody>
                     {filteredAudits.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="10"
+                          colSpan="11"
                           style={{
                             ...tableCellStyle,
                             textAlign: "center",
@@ -1988,6 +2004,11 @@ function App() {
                                 >
                                   {actionInfo.label}
                                 </button>
+                              )}
+                            </td>
+                            <td style={tableCellStyle}>
+                              {formatDateOnly(getAuditFollowUpDueDate(audit.auditId)) || (
+                                <span style={{ color: "#adb5bd" }}>—</span>
                               )}
                             </td>
                           </tr>
