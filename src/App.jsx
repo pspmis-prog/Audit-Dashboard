@@ -56,6 +56,7 @@ function App() {
   const [followUpPhotoFiles, setFollowUpPhotoFiles] = useState([]);
   const [findings, setFindings] = useState([]);
   const [findingFilter, setFindingFilter] = useState("all"); // all | pending | submitted
+  const [findingSearchQuery, setFindingSearchQuery] = useState("");
 
   const [actionForm, setActionForm] = useState({
     auditId: "",
@@ -1161,12 +1162,22 @@ function App() {
     );
   };
 
-  // Findings for the Followup tab list, filtered by pending/submitted.
-  const followUpListFindings = findings.filter((f) => {
-    if (findingFilter === "pending") return !hasFollowUp(f);
-    if (findingFilter === "submitted") return hasFollowUp(f);
-    return true;
-  });
+  // Findings for the Followup tab list, filtered by pending/submitted and
+  // by a free-text search on Audit ID or Finding ID.
+  const followUpListFindings = findings
+    .filter((f) => {
+      if (findingFilter === "pending") return !hasFollowUp(f);
+      if (findingFilter === "submitted") return hasFollowUp(f);
+      return true;
+    })
+    .filter((f) => {
+      const query = findingSearchQuery.trim().toLowerCase();
+      if (!query) return true;
+      return (
+        (f.auditId || "").toLowerCase().includes(query) ||
+        (f.findingId || "").toLowerCase().includes(query)
+      );
+    });
 
   const sidebarItems = [
     { id: "createAudit", label: "Schedule Audit" },
@@ -2163,6 +2174,36 @@ function App() {
                 <button style={filterChipStyle(findingFilter === "all")} onClick={() => setFindingFilter("all")}>All</button>
                 <button style={filterChipStyle(findingFilter === "pending", "#997404")} onClick={() => setFindingFilter("pending")}>Pending</button>
                 <button style={filterChipStyle(findingFilter === "submitted", "#0f5132")} onClick={() => setFindingFilter("submitted")}>Submitted</button>
+                <input
+                  type="text"
+                  placeholder="Search Audit ID or Finding ID..."
+                  value={findingSearchQuery}
+                  onChange={(e) => setFindingSearchQuery(e.target.value)}
+                  style={{
+                    padding: "9px 14px",
+                    borderRadius: "999px",
+                    border: "1px solid #ced4da",
+                    fontSize: "14px",
+                    minWidth: "220px",
+                    flex: "1 1 220px"
+                  }}
+                />
+                {findingSearchQuery && (
+                  <button
+                    onClick={() => setFindingSearchQuery("")}
+                    style={{
+                      padding: "9px 16px",
+                      borderRadius: "999px",
+                      border: "1px solid #ced4da",
+                      background: "#fff",
+                      color: "#6c757d",
+                      cursor: "pointer",
+                      fontSize: "14px"
+                    }}
+                  >
+                    Clear search
+                  </button>
+                )}
               </div>
               <div style={{ overflowX: "auto", maxWidth: "100%" }}>
                 <table style={{ width: "100%", minWidth: "1000px", tableLayout: "auto", borderCollapse: "collapse" }}>
