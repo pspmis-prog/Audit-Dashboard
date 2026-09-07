@@ -1183,7 +1183,7 @@ function App() {
   ];
 
   return (
-    <div style={{ background: "#f5f7fa", minHeight: "100vh", display: "flex" }}>
+    <div style={{ background: "#f5f7fa", minHeight: "100vh", display: "flex", maxWidth: "100vw", overflowX: "hidden" }}>
       {/* ---- Left Sidebar ---- */}
       <div
         style={{
@@ -1825,8 +1825,8 @@ function App() {
                 );
               })()}
 
-              <div>
-                <table style={{ width: "100%", tableLayout: "auto", borderCollapse: "collapse" }}>
+              <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+                <table style={{ width: "100%", minWidth: "1000px", tableLayout: "auto", borderCollapse: "collapse" }}>
                   <colgroup>
                     <col style={{ width: "8%" }} />
                     <col style={{ width: "8%" }} />
@@ -2214,8 +2214,8 @@ function App() {
                 <button style={filterChipStyle(findingFilter === "pending", "#997404")} onClick={() => setFindingFilter("pending")}>Pending</button>
                 <button style={filterChipStyle(findingFilter === "submitted", "#0f5132")} onClick={() => setFindingFilter("submitted")}>Submitted</button>
               </div>
-              <div>
-                <table style={{ width: "100%", tableLayout: "auto", borderCollapse: "collapse" }}>
+              <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+                <table style={{ width: "100%", minWidth: "1000px", tableLayout: "auto", borderCollapse: "collapse" }}>
                   <colgroup>
                     <col style={{ width: "8%" }} />
                     <col style={{ width: "8%" }} />
@@ -2372,8 +2372,8 @@ function App() {
               }}
             >
               <h4 style={{ marginBottom: "15px", fontSize: "19px", color: "#000" }}>Action List</h4>
-              <div>
-                <table style={{ width: "100%", tableLayout: "auto", borderCollapse: "collapse" }}>
+              <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+                <table style={{ width: "100%", minWidth: "1000px", tableLayout: "auto", borderCollapse: "collapse" }}>
                   <colgroup>
                     <col style={{ width: "12%" }} />
                     <col style={{ width: "12%" }} />
@@ -2573,8 +2573,8 @@ function App() {
               }}
             >
               <h4 style={{ marginBottom: "15px", fontSize: "19px", color: "#000" }}>Action Plan List</h4>
-              <div>
-                <table style={{ width: "100%", tableLayout: "auto", borderCollapse: "collapse" }}>
+              <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+                <table style={{ width: "100%", minWidth: "1000px", tableLayout: "auto", borderCollapse: "collapse" }}>
                   <colgroup>
                     <col style={{ width: "8%" }} />
                     <col style={{ width: "8%" }} />
