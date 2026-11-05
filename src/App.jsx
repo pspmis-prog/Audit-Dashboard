@@ -346,6 +346,16 @@ function App() {
 
   const isTodayAudit = (auditDateTime) => isSameDay(auditDateTime, new Date());
 
+  // The month an audit "belongs to" for counting/filtering is the month it
+  // was ORIGINALLY planned for. When an audit is rescheduled, its
+  // `previousAuditDateTime` keeps that original planned date (see
+  // handleSaveReschedule), so an October audit rescheduled into November
+  // stays counted in October and does not inflate November.
+  const getPlannedDate = (audit) =>
+    audit.rescheduleCount > 0 && audit.previousAuditDateTime
+      ? audit.previousAuditDateTime
+      : audit.auditDateTime;
+
   // Checks whether a date falls within the given "YYYY-MM" month string.
   // No month selected = show all months.
   const isInStatsMonth = (auditDateTime, monthStr) => {
@@ -404,7 +414,7 @@ function App() {
   const sortedAudits = [...audits].reverse();
 
   // Audits that fall within the currently selected stats month
-  const statsMonthAudits = audits.filter((a) => isInStatsMonth(a.auditDateTime, statsMonth));
+  const statsMonthAudits = audits.filter((a) => isInStatsMonth(getPlannedDate(a), statsMonth));
 
   const todaysAuditsCount = statsMonthAudits.filter((a) =>
     isTodayAudit(a.auditDateTime)
@@ -432,7 +442,7 @@ function App() {
   ).length;
 
   const filteredAudits = sortedAudits.filter((audit) => {
-    if (!isInStatsMonth(audit.auditDateTime, statsMonth)) return false;
+    if (!isInStatsMonth(getPlannedDate(audit), statsMonth)) return false;
     if (auditDateFilter === "today") return isTodayAudit(audit.auditDateTime);
     if (auditDateFilter === "upcoming") return isUpcomingAudit(audit.auditDateTime);
     if (auditDateFilter === "missed") return isMissedAudit(audit);
@@ -702,7 +712,10 @@ function App() {
   };
 
   // NOTE ON BACKEND: this writes `previousAuditDateTime`, `rescheduleReason`
-  // and `rescheduleCount` onto the audit row so a history is kept. The
+  // and `rescheduleCount` onto the audit row so a history is kept.
+  // `previousAuditDateTime` always holds the ORIGINALLY planned date (it is
+  // not overwritten on a 2nd/3rd reschedule), which is what decides the
+  // month the audit is counted in. The
   // Audit_Master sheet + apiSaveAudit handler need matching columns:
   // "Previous Audit Date Time", "Reschedule Reason", "Reschedule Count".
   const handleSaveReschedule = async () => {
@@ -732,7 +745,10 @@ function App() {
         departmentName: audit.departmentName,
         observer: audit.observer || "",
         remark: audit.remark || "",
-        previousAuditDateTime: audit.auditDateTime,
+        previousAuditDateTime:
+          audit.rescheduleCount > 0 && audit.previousAuditDateTime
+            ? audit.previousAuditDateTime
+            : audit.auditDateTime,
         rescheduleReason: rescheduleForm.reason.trim(),
         rescheduleCount: (audit.rescheduleCount || 0) + 1
       });
@@ -1268,7 +1284,7 @@ function App() {
                 }}
               >
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Audit Date Time</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Audit Date Time</label>
                   <input
                     type="datetime-local"
                     name="auditDateTime"
@@ -1279,7 +1295,7 @@ function App() {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Start Time</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Start Time</label>
                   <input
                     type="time"
                     name="startTime"
@@ -1290,7 +1306,7 @@ function App() {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <label style={{ fontSize: "16px", color: "#000" }}>End Time</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>End Time</label>
                   <input
                     type="time"
                     name="endTime"
@@ -1301,7 +1317,7 @@ function App() {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Auditor Name</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Auditor Name</label>
                   <input
                     type="text"
                     name="auditorName"
@@ -1312,7 +1328,7 @@ function App() {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Auditee Name</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Auditee Name</label>
                   <input
                     type="text"
                     name="auditeeName"
@@ -1323,7 +1339,7 @@ function App() {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Department Name</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Department Name</label>
                   <select
                     name="departmentName"
                     value={auditForm.departmentName}
@@ -1674,7 +1690,7 @@ function App() {
                           Reschedule this audit
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                          <label style={{ fontSize: "15px", color: "#000" }}>New Audit Date Time</label>
+                          <label style={{ fontSize: "15px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>New Audit Date Time</label>
                           <input
                             type="datetime-local"
                             name="newDateTime"
@@ -1684,7 +1700,7 @@ function App() {
                           />
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                          <label style={{ fontSize: "15px", color: "#000" }}>Reason for Reschedule</label>
+                          <label style={{ fontSize: "15px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Reason for Reschedule</label>
                           <input
                             type="text"
                             name="reason"
@@ -1716,7 +1732,7 @@ function App() {
                       qaInfo.status === "Pending" ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                            <label style={{ fontSize: "15px", color: "#000" }}>Finding</label>
+                            <label style={{ fontSize: "15px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Finding</label>
                             <textarea
                               rows={2}
                               value={quickFindingText}
@@ -1725,7 +1741,7 @@ function App() {
                             />
                           </div>
                           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                            <label style={{ fontSize: "15px", color: "#000" }}>Evidence Photos</label>
+                            <label style={{ fontSize: "15px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Evidence Photos</label>
                             <input
                               type="file"
                               accept="image/*"
@@ -1758,7 +1774,7 @@ function App() {
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                            <label style={{ fontSize: "15px", color: "#000" }}>Finding</label>
+                            <label style={{ fontSize: "15px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Finding</label>
                             <select
                               value={quickFollowUpFindingId}
                               onChange={(e) => setQuickFollowUpFindingId(e.target.value)}
@@ -1773,7 +1789,7 @@ function App() {
                             </select>
                           </div>
                           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                            <label style={{ fontSize: "15px", color: "#000" }}>Follow-up Evidence Photos</label>
+                            <label style={{ fontSize: "15px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Follow-up Evidence Photos</label>
                             <input
                               type="file"
                               accept="image/*"
@@ -1885,6 +1901,11 @@ function App() {
                                   <span style={statusBadgeStyle("Rescheduled")}>
                                     Rescheduled ({audit.rescheduleCount}x)
                                   </span>
+                                  {audit.previousAuditDateTime && (
+                                    <div style={{ fontSize: "12px", color: "#6c757d", marginTop: "2px" }}>
+                                      Originally {formatDateOnly(audit.previousAuditDateTime)}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </td>
@@ -2029,7 +2050,7 @@ function App() {
                 }}
               >
                 <div>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Mode</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Mode</label>
                   <select
                     name="mode"
                     value={findingForm.mode}
@@ -2042,7 +2063,7 @@ function App() {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Audit ID</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Audit ID</label>
                   <select
                     name="auditId"
                     value={findingForm.auditId}
@@ -2060,7 +2081,7 @@ function App() {
 
                 {findingForm.mode === "followup" && (
                   <div>
-                    <label style={{ fontSize: "16px", color: "#000" }}>Finding ID</label>
+                    <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Finding ID</label>
                     <select
                       name="findingId"
                       value={findingForm.findingId}
@@ -2082,7 +2103,7 @@ function App() {
                 {findingForm.mode === "new" && (
                   <>
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <label style={{ fontSize: "16px", color: "#000" }}>Finding</label>
+                      <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Finding</label>
                       <textarea
                         name="finding"
                         rows={3}
@@ -2093,7 +2114,7 @@ function App() {
                     </div>
 
                     <div>
-                      <label style={{ fontSize: "16px", color: "#000" }}>Evidence Photos</label>
+                      <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Evidence Photos</label>
                       <input
                         type="file"
                         accept="image/*"
@@ -2113,7 +2134,7 @@ function App() {
                 {findingForm.mode === "followup" && selectedFindingInFindingTab && (
                   <>
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <label style={{ fontSize: "16px", color: "#000" }}>Existing Finding</label>
+                      <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Existing Finding</label>
                       <textarea
                         value={selectedFindingInFindingTab.finding || ""}
                         readOnly
@@ -2123,7 +2144,7 @@ function App() {
                     </div>
 
                     <div>
-                      <label style={{ fontSize: "16px", color: "#000" }}>Finding Evidence Photos</label>
+                      <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Finding Evidence Photos</label>
                       <div style={{ marginTop: "8px" }}>
                         {renderPhotoLinks(
                           getFindingPhotoUrls(selectedFindingInFindingTab),
@@ -2133,7 +2154,7 @@ function App() {
                     </div>
 
                     <div>
-                      <label style={{ fontSize: "16px", color: "#000" }}>Follow-up Evidence Photos</label>
+                      <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Follow-up Evidence Photos</label>
                       <input
                         type="file"
                         accept="image/*"
@@ -2301,7 +2322,7 @@ function App() {
                 }}
               >
                 <div>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Audit ID</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Audit ID</label>
                   <select
                     name="auditId"
                     value={actionForm.auditId}
@@ -2318,7 +2339,7 @@ function App() {
                 </div>
 
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ fontSize: "16px", color: "#000" }}>CAPA</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>CAPA</label>
                   <textarea
                     name="action"
                     value={actionForm.action}
@@ -2328,7 +2349,7 @@ function App() {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Actual Date</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Actual Date</label>
                   <input
                     type="date"
                     name="actualDate"
@@ -2339,7 +2360,7 @@ function App() {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Evidence Photo</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Evidence Photo</label>
                   <input
                     type="file"
                     accept="image/*"
@@ -2461,7 +2482,7 @@ function App() {
                 }}
               >
                 <div>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Audit ID</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Audit ID</label>
                   <select
                     name="auditId"
                     value={actionPlanForm.auditId}
@@ -2478,7 +2499,7 @@ function App() {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Finding ID</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Finding ID</label>
                   <select
                     name="findingId"
                     value={actionPlanForm.findingId}
@@ -2497,7 +2518,7 @@ function App() {
                 {selectedFindingInActionPlan && (
                   <>
                     <div>
-                      <label style={{ fontSize: "16px", color: "#000" }}>Finding Evidence</label>
+                      <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Finding Evidence</label>
                       <div style={{ marginTop: "8px" }}>
                         {renderPhotoLinks(
                           getFindingPhotoUrls(selectedFindingInActionPlan),
@@ -2507,7 +2528,7 @@ function App() {
                     </div>
 
                     <div>
-                      <label style={{ fontSize: "16px", color: "#000" }}>Follow-up Evidence</label>
+                      <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Follow-up Evidence</label>
                       <div style={{ marginTop: "8px" }}>
                         {renderPhotoLinks(
                           getFollowUpPhotoUrls(selectedFindingInActionPlan),
@@ -2519,7 +2540,7 @@ function App() {
                 )}
 
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Action Plan</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Action Plan</label>
                   <textarea
                     name="actionPlan"
                     value={actionPlanForm.actionPlan}
@@ -2529,7 +2550,7 @@ function App() {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Actual Date</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Actual Date</label>
                   <input
                     type="date"
                     name="actualDate"
@@ -2540,7 +2561,7 @@ function App() {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: "16px", color: "#000" }}>Photo</label>
+                  <label style={{ fontSize: "16px", color: "#000", display: "block", width: "100%", textAlign: "left" }}>Photo</label>
                   <input
                     type="file"
                     accept="image/*"
