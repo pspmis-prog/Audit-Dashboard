@@ -368,6 +368,26 @@ function App() {
     return auditMonth === monthStr;
   };
 
+  // True when the audit still has an open (not yet closed) finding whose
+  // follow-up is due in the given month. This lets an October audit also
+  // show up in November's view when its follow-up work falls in November,
+  // so the doer doesn't miss it.
+  const hasOpenFollowUpDueInMonth = (auditId, monthStr) => {
+    if (!monthStr) return false;
+    return getFindingsForAudit(auditId).some(
+      (f) =>
+        getFindingClosureStatus(f) !== "Closed" &&
+        f.followUpDate &&
+        isInStatsMonth(f.followUpDate, monthStr)
+    );
+  };
+
+  // An audit belongs in a month's list if it was planned in that month OR
+  // it has an open follow-up due in that month.
+  const isInListMonth = (audit, monthStr) =>
+    isInStatsMonth(getPlannedDate(audit), monthStr) ||
+    hasOpenFollowUpDueInMonth(audit.auditId, monthStr);
+
   // Schedule status for the Audit List's "Schedule" column.
   // Once a finding has an open follow-up with a known due date, base
   // Missed/Upcoming on THAT due date rather than the audit's own
@@ -437,12 +457,15 @@ function App() {
     (a) => getAuditActionInfo(a.auditId).status === "Pending"
   ).length;
 
-  const followUpPendingCount = statsMonthAudits.filter(
-    (a) => getAuditActionInfo(a.auditId).status === "Open"
+  // Follow-up Pending counts the follow-up workload for the month: audits
+  // planned in it plus earlier-month audits whose follow-up is due in it.
+  // (The other tiles still count only audits planned in the month.)
+  const followUpPendingCount = audits.filter(
+    (a) => isInListMonth(a, statsMonth) && getAuditActionInfo(a.auditId).status === "Open"
   ).length;
 
   const filteredAudits = sortedAudits.filter((audit) => {
-    if (!isInStatsMonth(getPlannedDate(audit), statsMonth)) return false;
+    if (!isInListMonth(audit, statsMonth)) return false;
     if (auditDateFilter === "today") return isTodayAudit(audit.auditDateTime);
     if (auditDateFilter === "upcoming") return isUpcomingAudit(audit.auditDateTime);
     if (auditDateFilter === "missed") return isMissedAudit(audit);
